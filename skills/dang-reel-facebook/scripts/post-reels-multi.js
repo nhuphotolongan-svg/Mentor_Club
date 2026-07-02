@@ -24,7 +24,6 @@ const CFG = {
   RECORD_ID:       process.env.RECORD_ID           || '',
   LARK_DOMAIN:     'https://open.larksuite.com',
   GRAPH_VERSION:   'v21.0',
-  TRIGGER:         'Chờ đăng',
 };
 const GRAPH = `https://graph.facebook.com/${CFG.GRAPH_VERSION}`;
 const DRY   = process.argv.includes('--dry-run');
@@ -36,13 +35,12 @@ if (!DRY && !CFG.APP_SECRET) {
 
 // Tên cột bảng đăng bài (tblGerQNgbg1dE1Y)
 const F = {
-  status:   'Trạng thái',    // select: Chờ đăng / Đã đăng / Lỗi
+  status:   'Trạng thái',    // ghi kết quả: Thành công / Thất bại
   media:    'Ảnh/video',
   caption:  'Nội dung',
   hashtag:  'Hastag',
-  link:     'Link Reel',
-  log:      'Log đăng Reel',
-  schedule: 'Lịch đăng bài',
+  link:     'Link Reel',     // ghi link bài sau khi đăng
+  log:      'Log đăng Reel', // ghi log chi tiết
   comment:  'Comment ebook',
   page:     'Page',
 };
@@ -160,16 +158,13 @@ async function updateRow(tk, recId, fields) {
 (async () => {
   const tk = await larkToken();
 
-  let targets;
-  if (CFG.RECORD_ID) {
-    log(`Chế độ đơn: record_id=${CFG.RECORD_ID}`);
-    const rec = await getRecord(tk, CFG.TABLE_ID, CFG.RECORD_ID);
-    targets = [rec];
-  } else {
-    const rows = await listAll(tk);
-    targets = rows.filter(r => plain(r.fields[F.status]) === CFG.TRIGGER);
-    log(`Tìm thấy ${targets.length} dòng "${CFG.TRIGGER}" (tổng ${rows.length}).`);
+  if (!CFG.RECORD_ID) {
+    console.error('!! Thiếu RECORD_ID — phải truyền qua client_payload khi gọi dispatch.');
+    process.exit(1);
   }
+  log(`Đăng record_id=${CFG.RECORD_ID}`);
+  const rec = await getRecord(tk, CFG.TABLE_ID, CFG.RECORD_ID);
+  const targets = [rec];
 
   let ok=0, err=0;
   for (const row of targets) {
@@ -182,14 +177,14 @@ async function updateRow(tk, recId, fields) {
     const pageInfo = await getPageInfo(tk, row.fields[F.page]);
     if (!pageInfo || !pageInfo.pageId || !pageInfo.pageToken) {
       log(`  [BỎ QUA] ${recId}: không tìm được page/token.`);
-      if (!DRY) await updateRow(tk, recId, {[F.status]:'Lỗi', [F.log]:`${now()} - không tìm được page`});
+      if (!DRY) await updateRow(tk, recId, {[F.status]:'Thất bại', [F.log]:`${now()} - không tìm được page`});
       err++; continue;
     }
     log(`  >> ${recId}: page="${pageInfo.pageName}" | file="${(att&&att.name||'').slice(0,40)}"`);
 
     if (!att || !att.file_token) {
       log(`  [BỎ QUA] ${recId}: không có file video.`);
-      if (!DRY) await updateRow(tk, recId, {[F.status]:'Lỗi', [F.log]:`${now()} - không có file`});
+      if (!DRY) await updateRow(tk, recId, {[F.status]:'Thất bại', [F.log]:`${now()} - không có file`});
       err++; continue;
     }
 
@@ -208,12 +203,12 @@ async function updateRow(tk, recId, fields) {
         try { await postComment(videoId, pageInfo.pageToken, commentText); cmtNote = ' +cmt'; }
         catch(e) { cmtNote = ' (cmt lỗi: '+String(e.message||e).slice(0,80)+')'; log(`     ! comment lỗi: ${e.message}`); }
       }
-      await updateRow(tk, recId, {[F.status]:'Đã đăng', [F.link]:permalink||'', [F.log]:`${now()} - OK - video_id ${videoId}${cmtNote}`});
+      await updateRow(tk, recId, {[F.status]:'Thành công', [F.link]:permalink||'', [F.log]:`${now()} - OK - video_id ${videoId}${cmtNote}`});
       log(`     ✔ ĐÃ ĐĂNG: ${permalink||'(đang xử lý)'}`); ok++;
     } catch(e) {
       const msg = String(e.message||e).slice(0,300);
       log(`     ✖ LỖI: ${msg}`);
-      try { await updateRow(tk, recId, {[F.status]:'Lỗi', [F.log]:`${now()} - ${msg}`}); } catch {}
+      try { await updateRow(tk, recId, {[F.status]:'Thất bại', [F.log]:`${now()} - ${msg}`}); } catch {}
       err++;
     } finally {
       try { fs.unlinkSync(vp); } catch {}
