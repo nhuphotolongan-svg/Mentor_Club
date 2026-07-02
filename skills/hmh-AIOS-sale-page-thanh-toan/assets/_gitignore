@@ -1,0 +1,6 @@
+# Bí mật — KHÔNG commit
+.env
+.dev.vars
+SECRETS.local.txt
+node_modules/
+.wrangler/

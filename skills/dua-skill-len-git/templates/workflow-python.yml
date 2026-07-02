@@ -1,0 +1,29 @@
+# Mẫu workflow cho engine Python. Đổi: TÊN, EVENT_TYPE, đường dẫn script, deps, env.
+name: EVENT_TYPE
+
+on:
+  repository_dispatch:
+    types: [EVENT_TYPE]        # gọi qua HTTP: {"event_type":"EVENT_TYPE", ...}
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "tham số khi bấm chạy tay"
+        required: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests          # liệt kê dependencies engine cần
+      - name: Chạy engine
+        env:
+          # ---- Bí mật: khai trong GitHub Secrets ----
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          # ---- Không bí mật: body request ghi đè, fallback Variables ----
+          TARGET: ${{ github.event.client_payload.target || github.event.inputs.target || vars.TARGET }}
+        run: python path/to/engine.py --target "$TARGET"

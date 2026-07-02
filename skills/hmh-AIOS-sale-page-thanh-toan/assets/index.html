@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{TEN}}</title>
+<style>
+  :root { --brand: {{MAU}}; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1f2329; background: #0b0d12; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 18px; }
+  .hero { background: linear-gradient(160deg, #0b0d12, #14181f); color: #fff; padding: 64px 0 48px; text-align: center; }
+  .hero h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 14px; }
+  .hero p { font-size: 18px; color: #c8ccd4; margin: 0 auto 26px; max-width: 540px; }
+  .price { display: inline-block; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-radius: 999px; padding: 10px 22px; font-weight: 700; font-size: 18px; }
+  .card { background: #fff; border-radius: 16px; padding: 26px; margin: -28px auto 40px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  .card h2 { margin: 0 0 6px; font-size: 22px; }
+  .card .sub { color: #6b7280; margin: 0 0 18px; font-size: 14px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+  input { width: 100%; padding: 13px 14px; border: 1px solid #d7dbe0; border-radius: 10px; font-size: 15px; }
+  input:focus { outline: none; border-color: var(--brand); }
+  button { width: 100%; margin-top: 20px; padding: 15px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: progress; }
+  .err { color: #d92d20; font-size: 14px; margin-top: 10px; min-height: 18px; }
+  .benefits { color: #fff; padding: 8px 0 56px; }
+  .benefits ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .benefits li { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 14px 16px; }
+  footer { color: #6b7280; text-align: center; padding: 24px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <h1>{{TEN}}</h1>
+      <p>{{MO_TA}}</p>
+      <div class="price">Học phí: {{GIA_FMT}}đ</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <h2>Đăng ký ngay</h2>
+      <p class="sub">Điền thông tin — hệ thống tạo mã đơn và hướng dẫn thanh toán tự động.</p>
+      <form id="f">
+        <label>Họ và tên *</label>
+        <input name="name" required placeholder="Nguyễn Văn A" />
+        <label>Số điện thoại *</label>
+        <input name="phone" required inputmode="tel" placeholder="09xx xxx xxx" />
+        <label>Email</label>
+        <input name="email" type="email" placeholder="ban@email.com" />
+        <label>Lĩnh vực kinh doanh</label>
+        <input name="industry" placeholder="VD: Spa, F&B, Bất động sản..." />
+        <button type="submit" id="btn">Đăng ký &amp; Thanh toán →</button>
+        <div class="err" id="err"></div>
+      </form>
+    </section>
+
+    <section class="benefits">
+      <ul>
+        <li>✅ Thanh toán qua chuyển khoản VietQR — quét là xong</li>
+        <li>✅ Xác nhận tự động trong vài giây, không chờ đợi</li>
+        <li>✅ Nhận email hướng dẫn ngay sau khi thanh toán</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>© {{TEN}}</footer>
+
+<script>
+  const f = document.getElementById('f');
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('err');
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = 'Đang xử lý...';
+    try {
+      const fd = new FormData(f);
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(fd)),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Có lỗi xảy ra, thử lại.');
+      const q = new URLSearchParams({ order: data.order_id, name: data.name || '', email: data.email || '' });
+      location.href = '/thanh-toan/?' + q.toString();
+    } catch (ex) {
+      err.textContent = ex.message;
+      btn.disabled = false; btn.textContent = 'Đăng ký & Thanh toán →';
+    }
+  });
+</script>
+</body>
+</html>

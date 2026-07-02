@@ -1,0 +1,13 @@
+# Copy file này thành `.dev.vars` (KHÔNG commit) để chạy local: wrangler pages dev .
+LARK_APP_ID=cli_xxxx
+LARK_APP_SECRET=xxxx
+LARK_BASE_TOKEN=xxxx
+LARK_TABLE_ID=tblxxxx
+LARK_TEMPLATE_TABLE_ID=tblxxxx
+SEPAY_API_KEY=x3sepay_xxxx
+SMTP_USER=mentor@domain.net
+SMTP_PASS=xxxx
+SMAX_TRIGGER_URL=
+SMAX_TOKEN=
+SMAX_CUSTOMER_PID=
+SMAX_PAGE_ID=

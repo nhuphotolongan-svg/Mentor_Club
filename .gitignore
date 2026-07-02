@@ -1,0 +1,7 @@
+node_modules/
+.venv/
+config.local.json
+*.local.json
+logs/
+*.log
+.DS_Store

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Thanh toán — {{TEN}}</title>
+<style>
+  :root { --brand: {{MAU}}; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: #0b0d12; color: #1f2329; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 28px 18px; }
+  .card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  h1 { font-size: 20px; margin: 0 0 4px; text-align: center; }
+  .muted { color: #6b7280; font-size: 14px; text-align: center; margin: 0 0 18px; }
+  .qr { display: block; width: 240px; max-width: 80%; margin: 8px auto 16px; border-radius: 12px; border: 1px solid #eef0f3; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #e5e7eb; font-size: 14px; }
+  .row b { color: #111827; text-align: right; }
+  .amount { color: var(--brand); font-size: 18px; }
+  .note { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-top: 16px; line-height: 1.5; }
+  .status { text-align: center; margin-top: 18px; font-weight: 600; color: #6b7280; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; margin-right: 6px; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .ok { display: none; text-align: center; padding: 20px 0; }
+  .ok .check { font-size: 56px; }
+  .ok h2 { color: #16a34a; margin: 8px 0 6px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" id="payBox">
+      <h1>Quét mã để thanh toán</h1>
+      <p class="muted">Mã đơn: <b id="orderTxt">—</b></p>
+      <img class="qr" id="qr" alt="VietQR" />
+      <div class="row"><span>Ngân hàng</span><b>{{BANK_CODE}}</b></div>
+      <div class="row"><span>Số tài khoản</span><b>{{SO_TK}}</b></div>
+      <div class="row"><span>Chủ tài khoản</span><b>{{TEN_CHU_TK}}</b></div>
+      <div class="row"><span>Số tiền</span><b class="amount">{{GIA_FMT}}đ</b></div>
+      <div class="row"><span>Nội dung CK</span><b id="memo">—</b></div>
+      <div class="note">⚠️ Nhập <b>đúng nội dung chuyển khoản</b> ở trên (mã đơn) để hệ thống tự xác nhận. Trang sẽ tự cập nhật khi nhận được tiền.</div>
+      <div class="status" id="status"><span class="dot"></span>Đang chờ thanh toán…</div>
+    </div>
+
+    <div class="card ok" id="okBox">
+      <div class="check">✅</div>
+      <h2>Thanh toán thành công!</h2>
+      <p class="muted">Cảm ơn bạn. Chúng tôi đã gửi email xác nhận. Đội ngũ sẽ liên hệ sớm.</p>
+    </div>
+  </div>
+
+<script>
+  const BANK = "{{BANK_CODE}}";
+  const ACC = "{{SO_TK}}";
+  const AMOUNT = "{{GIA}}";
+  const ACC_NAME = "{{TEN_CHU_TK_ENC}}";
+
+  const params = new URLSearchParams(location.search);
+  const order = (params.get('order') || '').toUpperCase();
+  document.getElementById('orderTxt').textContent = order || '—';
+  document.getElementById('memo').textContent = order || '—';
+
+  // VietQR tự sinh QR có sẵn số tiền + nội dung = mã đơn
+  const qrUrl = `https://img.vietqr.io/image/${BANK}-${ACC}-compact2.png`
+    + `?amount=${encodeURIComponent(AMOUNT)}`
+    + `&addInfo=${encodeURIComponent(order)}`
+    + `&accountName=${ACC_NAME}`;
+  document.getElementById('qr').src = qrUrl;
+
+  function showSuccess() {
+    document.getElementById('payBox').style.display = 'none';
+    document.getElementById('okBox').style.display = 'block';
+  }
+
+  async function checkPayment() {
+    if (!/^X3\d{8}$/.test(order)) return;
+    try {
+      const res = await fetch('/api/check-payment?order=' + encodeURIComponent(order));
+      const data = await res.json();
+      if (data.paid) { clearInterval(timer); showSuccess(); }
+    } catch (e) { /* lặng lẽ thử lại lần sau */ }
+  }
+  const timer = setInterval(checkPayment, 4000);
+  checkPayment();
+</script>
+</body>
+</html>

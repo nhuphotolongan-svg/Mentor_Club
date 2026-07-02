@@ -1,0 +1,14 @@
+{
+  "name": "dang-video-youtube",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hệ thống đăng video YouTube hẹn giờ từ Lark Base",
+  "type": "commonjs",
+  "scripts": {
+    "auth": "node auth.js",
+    "post": "node scan-and-post.js"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  }
+}

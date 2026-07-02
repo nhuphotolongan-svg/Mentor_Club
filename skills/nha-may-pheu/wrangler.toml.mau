@@ -1,0 +1,26 @@
+# MẪU wrangler.toml — đổi <...> theo chiến dịch của bạn, rồi đổi tên file thành wrangler.toml
+name = "leadpage-<ten-chien-dich>"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+assets = { directory = "./public", binding = "ASSETS" }
+
+# Đếm mở email không trùng (dedup theo day:record).
+# Tạo namespace bằng: npx wrangler kv namespace create OPENS  -> dán id trả về vào đây.
+[[kv_namespaces]]
+binding = "OPENS"
+id = "<KV_NAMESPACE_ID_CUA_BAN>"
+
+# Cron: 01:00 UTC = 08:00 giờ VN -> gửi email nurture đến hạn
+[triggers]
+crons = ["0 1 * * *"]
+
+# Gắn domain thật (Cloudflare tự tạo DNS + SSL khi deploy):
+[[routes]]
+pattern = "<khoa1.ten-mien-cua-ban.com>"
+custom_domain = true
+
+# Secrets (KHÔNG ghi giá trị ở đây — nạp bằng: npx wrangler secret put <TÊN>):
+#   LARK_APP_ID, LARK_APP_SECRET, SMTP_USER, SMTP_PASS, FROM_NAME, ZALO_LINK
+#   (tuỳ chọn) LINK_KHOA -> URL trang bán khóa, thay [LINK_KHOA] trong email

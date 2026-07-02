@@ -1,0 +1,26 @@
+# Mẫu workflow cho engine Node. Đổi: TÊN, EVENT_TYPE, đường dẫn script, env.
+name: EVENT_TYPE
+
+on:
+  repository_dispatch:
+    types: [EVENT_TYPE]        # gọi qua HTTP: {"event_type":"EVENT_TYPE", ...}
+  workflow_dispatch:           # cho phép bấm chạy tay trên GitHub UI
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # - run: npm ci        # bật nếu engine có package.json/dependencies
+      - name: Chạy engine
+        env:
+          # ---- Bí mật: khai trong GitHub Secrets ----
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          # ---- Không bí mật: cho phép body request ghi đè (trống -> dùng default trong script) ----
+          TABLE_ID: ${{ github.event.client_payload.table_id }}
+          TARGET_ID: ${{ github.event.client_payload.target_id }}
+        run: node path/to/engine.js
