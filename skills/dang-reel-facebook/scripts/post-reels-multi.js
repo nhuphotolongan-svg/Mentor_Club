@@ -36,6 +36,7 @@ if (!DRY && !CFG.APP_SECRET) {
 // Tên cột bảng đăng bài (tblGerQNgbg1dE1Y)
 const F = {
   status:   'Trạng thái',    // ghi kết quả: Thành công / Thất bại
+  loai:     'Loại',          // select: Video | Hình ảnh
   media:    'Ảnh/video',
   caption:  'Nội dung',
   hashtag:  'Hastag',
@@ -144,8 +145,34 @@ async function postReel(pageId, pageToken, videoPath, caption) {
   return {videoId, permalink};
 }
 
-async function postComment(videoId, pageToken, message) {
-  return fbFetch(`${GRAPH}/${videoId}/comments`, { method:'POST', body: new URLSearchParams({ message, access_token:pageToken }) });
+async function postComment(objectId, pageToken, message) {
+  return fbFetch(`${GRAPH}/${objectId}/comments`, { method:'POST', body: new URLSearchParams({ message, access_token:pageToken }) });
+}
+
+async function postPhoto(pageId, pageToken, filePath, caption) {
+  const buf = fs.readFileSync(filePath);
+  const boundary = '----FormBoundary' + Date.now();
+  const CRLF = '\r\n';
+  const enc = s => Buffer.from(s, 'utf-8');
+  const parts = [
+    enc(`--${boundary}${CRLF}Content-Disposition: form-data; name="caption"${CRLF}${CRLF}`),
+    enc(caption || ''),
+    enc(`${CRLF}--${boundary}${CRLF}Content-Disposition: form-data; name="access_token"${CRLF}${CRLF}`),
+    enc(pageToken),
+    enc(`${CRLF}--${boundary}${CRLF}Content-Disposition: form-data; name="source"; filename="photo.jpg"${CRLF}Content-Type: image/jpeg${CRLF}${CRLF}`),
+    buf,
+    enc(`${CRLF}--${boundary}--${CRLF}`),
+  ];
+  const body = Buffer.concat(parts);
+  const res = await fbFetch(`${GRAPH}/${pageId}/photos`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+    body,
+  });
+  // res = {id, post_id}
+  const postId = res.post_id || res.id;
+  const permalink = postId ? `https://www.facebook.com/${postId.replace('_','/')}` : '';
+  return { photoId: res.id, postId, permalink };
 }
 
 async function updateRow(tk, recId, fields) {
@@ -169,49 +196,71 @@ async function updateRow(tk, recId, fields) {
   let ok=0, err=0;
   for (const row of targets) {
     const recId   = row.record_id;
+    const loai    = plain(row.fields[F.loai]).trim();         // "Video" hoặc "Hình ảnh"
+    const isVideo = loai === 'Video';
+    const isPhoto = loai === 'Hình ảnh';
     const media   = row.fields[F.media];
-    const att     = Array.isArray(media) ? (media.find(a=>/\.(mp4|mov|m4v|webm)$/i.test(a.name||''))||media[0]) : null;
+    const att     = Array.isArray(media) ? media[0] : null;
     const caption = [plain(row.fields[F.caption]), plain(row.fields[F.hashtag])].filter(Boolean).join('\n\n');
 
-    // Lấy thông tin page từ relation
+    if (!isVideo && !isPhoto) {
+      log(`  [BỎ QUA] ${recId}: Loại="${loai}" không hỗ trợ (chỉ Video/Hình ảnh).`);
+      if (!DRY) await updateRow(tk, recId, {[F.status]:'Thất bại', [F.log]:`${now()} - Loại không hỗ trợ: ${loai}`});
+      err++; continue;
+    }
+
     const pageInfo = await getPageInfo(tk, row.fields[F.page]);
     if (!pageInfo || !pageInfo.pageId || !pageInfo.pageToken) {
       log(`  [BỎ QUA] ${recId}: không tìm được page/token.`);
       if (!DRY) await updateRow(tk, recId, {[F.status]:'Thất bại', [F.log]:`${now()} - không tìm được page`});
       err++; continue;
     }
-    log(`  >> ${recId}: page="${pageInfo.pageName}" | file="${(att&&att.name||'').slice(0,40)}"`);
 
     if (!att || !att.file_token) {
-      log(`  [BỎ QUA] ${recId}: không có file video.`);
+      log(`  [BỎ QUA] ${recId}: không có file.`);
       if (!DRY) await updateRow(tk, recId, {[F.status]:'Thất bại', [F.log]:`${now()} - không có file`});
       err++; continue;
     }
+
+    log(`  >> ${recId} [${loai}]: page="${pageInfo.pageName}" | file="${(att.name||'').slice(0,40)}"`);
 
     if (DRY) {
       log(`     [DRY] caption: ${caption.slice(0,80).replace(/\n/g,' ')}`);
       continue;
     }
 
-    const vp = path.join(os.tmpdir(), 'reel_'+recId+'.mp4');
+    const ext  = isVideo ? '.mp4' : '.jpg';
+    const tmpf = path.join(os.tmpdir(), 'media_'+recId+ext);
     try {
-      await downloadVideo(tk, att.file_token, vp);
-      const {videoId, permalink} = await postReel(pageInfo.pageId, pageInfo.pageToken, vp, caption);
+      await downloadVideo(tk, att.file_token, tmpf);
+
+      let permalink = '', objectId = '';
+      if (isVideo) {
+        const r = await postReel(pageInfo.pageId, pageInfo.pageToken, tmpf, caption);
+        permalink = r.permalink; objectId = r.videoId;
+        log(`     ✔ REEL ĐÃ ĐĂNG: ${permalink||'(đang xử lý)'}`);
+      } else {
+        const r = await postPhoto(pageInfo.pageId, pageInfo.pageToken, tmpf, caption);
+        permalink = r.permalink; objectId = r.photoId;
+        log(`     ✔ ẢNH ĐÃ ĐĂNG: ${permalink||'(đang xử lý)'}`);
+      }
+
       let cmtNote = '';
       const commentText = plain(row.fields[F.comment]).trim();
-      if (commentText) {
-        try { await postComment(videoId, pageInfo.pageToken, commentText); cmtNote = ' +cmt'; }
+      if (commentText && objectId) {
+        try { await postComment(objectId, pageInfo.pageToken, commentText); cmtNote = ' +cmt'; }
         catch(e) { cmtNote = ' (cmt lỗi: '+String(e.message||e).slice(0,80)+')'; log(`     ! comment lỗi: ${e.message}`); }
       }
-      await updateRow(tk, recId, {[F.status]:'Thành công', [F.link]:permalink||'', [F.log]:`${now()} - OK - video_id ${videoId}${cmtNote}`});
-      log(`     ✔ ĐÃ ĐĂNG: ${permalink||'(đang xử lý)'}`); ok++;
+
+      await updateRow(tk, recId, {[F.status]:'Thành công', [F.link]:permalink||'', [F.log]:`${now()} - OK [${loai}] id=${objectId}${cmtNote}`});
+      ok++;
     } catch(e) {
       const msg = String(e.message||e).slice(0,300);
       log(`     ✖ LỖI: ${msg}`);
       try { await updateRow(tk, recId, {[F.status]:'Thất bại', [F.log]:`${now()} - ${msg}`}); } catch {}
       err++;
     } finally {
-      try { fs.unlinkSync(vp); } catch {}
+      try { fs.unlinkSync(tmpf); } catch {}
     }
   }
   log(`Xong. Đăng: ${ok}, Lỗi: ${err}.`);
